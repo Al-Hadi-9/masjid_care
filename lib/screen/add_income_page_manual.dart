@@ -1,0 +1,321 @@
+import 'package:flutter/material.dart';
+
+import '../services/firestore_service.dart';
+import '../services/admin_service.dart';
+import '../widgets/app_appbar.dart';
+import '../widgets/app_bottom_nav.dart';
+import 'app_shell.dart';
+
+class AddIncomePage extends StatefulWidget {
+  const AddIncomePage({super.key});
+
+  @override
+  State<AddIncomePage> createState() => _AddIncomePageState();
+}
+
+class _KhatOption extends StatelessWidget {
+  const _KhatOption({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: EdgeInsets.zero,
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddIncomePageState extends State<AddIncomePage> {
+  final FirestoreService _firestoreService = FirestoreService();
+
+  final TextEditingController amountController = TextEditingController();
+
+  final TextEditingController noteController = TextEditingController();
+
+  final TextEditingController dateController = TextEditingController();
+
+  DateTime? selectedDate;
+
+  bool loading = false;
+
+  String selectedKhat = "জুমার দান";
+
+  Future<void> pickDate() async {
+    final DateTime today = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate ?? today,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+
+    if (picked != null) {
+      setState(() {
+        selectedDate = picked;
+        dateController.text =
+            "${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    noteController.dispose();
+    dateController.dispose();
+    super.dispose();
+  }
+
+  final List<String> khatList = [
+    "জুমার দান",
+    "সাধারণ অনুদান",
+    "ফিতরা",
+    "যাকাত",
+    "মাদ্রাসা",
+    "ঈদ",
+    "অন্যান্য",
+  ];
+
+  Future<void> saveIncome() async {
+    if (amountController.text.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("পরিমাণ লিখুন")));
+      return;
+    }
+
+    try {
+      setState(() {
+        loading = true;
+      });
+
+      await _firestoreService.addManualIncome(
+        khat: selectedKhat,
+        amount: amountController.text.trim(),
+        note: noteController.text.trim(),
+        date: selectedDate,
+        createdBy: AdminService.instance.currentAdminName,
+        createdByEmail: AdminService.instance.currentAdminEmail,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      setState(() {
+        loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primary = Color(0xff00594c);
+
+    return Scaffold(
+      appBar: AppAppBar(
+        title: AppAppBar.kMasjidName,
+        subtitle: 'নতুন আয় যোগ করুন',
+      ),
+
+      backgroundColor: const Color(0xffF7F7F7),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
+        child: Column(
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: selectedKhat,
+              itemHeight: 48,
+              decoration: InputDecoration(
+                labelText: "খাত",
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
+              items: khatList.map((item) {
+                return DropdownMenuItem(
+                  value: item,
+                  child: _KhatOption(
+                    label: item,
+                    icon: _incomeKhatIcon(item),
+                    color: _incomeKhatColor(item),
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedKhat = value!;
+                });
+              },
+            ),
+
+            const SizedBox(height: 24),
+
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: "Amount",
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                prefixIcon: const Icon(Icons.payments_outlined),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            TextField(
+              controller: dateController,
+              readOnly: true,
+              onTap: pickDate,
+              decoration: InputDecoration(
+                labelText: "Date",
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.calendar_today),
+                  onPressed: pickDate,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            TextField(
+              controller: noteController,
+              minLines: 5,
+              maxLines: 7,
+              decoration: InputDecoration(
+                labelText: "Note",
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                alignLabelWithHint: true,
+                contentPadding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(11),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 36),
+
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primary,
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(34),
+                  ),
+                ),
+
+                onPressed: loading ? null : saveIncome,
+
+                child: loading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        "Save",
+                        style: TextStyle(color: Colors.white, fontSize: 18),
+                      ),
+              ),
+            ),
+
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+      bottomNavigationBar: _bottomNavigationBar(context),
+    );
+  }
+
+  IconData _incomeKhatIcon(String khat) {
+    switch (khat) {
+      case 'জুমার দান':
+        return Icons.volunteer_activism_outlined;
+      case 'সাধারণ অনুদান':
+        return Icons.favorite_border;
+      case 'ফিতরা':
+        return Icons.handshake_outlined;
+      case 'যাকাত':
+        return Icons.account_balance_outlined;
+      case 'মাদ্রাসা':
+        return Icons.menu_book_outlined;
+      case 'ঈদ':
+        return Icons.celebration_outlined;
+      default:
+        return Icons.more_horiz;
+    }
+  }
+
+  Color _incomeKhatColor(String khat) {
+    switch (khat) {
+      case 'জুমার দান':
+        return const Color(0xFF16804F);
+      case 'সাধারণ অনুদান':
+        return const Color(0xFFB04B78);
+      case 'ফিতরা':
+        return const Color(0xFFB77A18);
+      case 'যাকাত':
+        return const Color(0xFF4B67B0);
+      case 'মাদ্রাসা':
+        return const Color(0xFF7A55A3);
+      case 'ঈদ':
+        return const Color(0xFFCE6D29);
+      default:
+        return const Color(0xFF65746E);
+    }
+  }
+
+  Widget _bottomNavigationBar(BuildContext context) {
+    return AppBottomNav(
+      currentIndex: 1,
+      onTap: (index) {
+        if (index == 1) {
+          Navigator.of(context).pop();
+          return;
+        }
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => AppShell(initialIndex: index)),
+          (_) => false,
+        );
+      },
+    );
+  }
+}

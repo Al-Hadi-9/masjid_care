@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /admins/{adminId} {
+      allow read, create, update: if true;
+      allow delete: if request.auth != null
+        && (resource.data.authUid == request.auth.uid
+          || get(/databases/$(database)/documents/masjids/$(resource.data.masjidToken)).data.ownerUid
+            == request.auth.uid);
+    }
+
+    match /supervisory_admin/{adminId} {
+      allow read, write: if true;
+    }
+
+    match /masjids/{masjidId} {
+      allow read, create, update: if true;
+      allow delete: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid;
+      match /{subCollection}/{docId} {
+        allow read, create, update: if true;
+        allow delete: if request.auth != null
+          && get(/databases/$(database)/documents/masjids/$(masjidId)).data.ownerUid
+            == request.auth.uid;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
